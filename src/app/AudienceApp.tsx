@@ -8,6 +8,8 @@ type State = {
     id: number;
     venue: string;
     date: string;
+    startTime: string | null;
+    endTime: string | null;
     open: boolean;
     full: boolean;
     requestsPerPerson: number;
@@ -17,6 +19,7 @@ type State = {
   queueSize?: number;
   unavailable?: { songId: number; status: string }[];
   nextAllowedAt?: string | null;
+  promotions?: { id: number; title: string; description: string | null }[];
 };
 
 type Props = {
@@ -24,15 +27,28 @@ type Props = {
   instagram: string;
   pix: { payload: string; svg: string; key: string; name: string };
   catalog: { songs: CatalogSong[]; artists: CatalogArtist[]; medleys: number[] };
+  agenda: { id: number; date: string; venue: string; start: string | null; end: string | null; live: boolean }[];
 };
 
-type Tab = "pedir" | "sugerir" | "pix" | "recado";
+type Tab = "pedir" | "promo" | "shows" | "sugerir" | "pix" | "recado";
 
 const MEDLEYS = "Medleys & Blocos Especiais";
 
 function fmtDate(d: string) {
   const [y, m, day] = d.split("-").map(Number);
   return new Date(y, m - 1, day).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
+}
+
+/** "21:00:00" + "01:30:00" → "21h às 01h30" */
+function fmtRange(start: string | null, end: string | null) {
+  const f = (t: string) => {
+    const [h, m] = t.split(":");
+    return m === "00" ? `${Number(h)}h` : `${Number(h)}h${m}`;
+  };
+  if (start && end) return `${f(start)} às ${f(end)}`;
+  if (start) return `a partir das ${f(start)}`;
+  if (end) return `até ${f(end)}`;
+  return "";
 }
 
 function fmtTime(iso: string) {
@@ -50,7 +66,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   rejected: { label: "Não vai rolar hoje", cls: "bg-zinc-500/15 text-zinc-300 border-zinc-500/40" },
 };
 
-export default function AudienceApp({ bandName, instagram, pix, catalog }: Props) {
+export default function AudienceApp({ bandName, instagram, pix, catalog, agenda }: Props) {
   const [tab, setTab] = useState<Tab>("pedir");
   const [state, setState] = useState<State | null>(null);
 
@@ -91,10 +107,12 @@ export default function AudienceApp({ bandName, instagram, pix, catalog }: Props
       </header>
 
       <nav className="sticky top-0 z-20 border-y border-line bg-ink/90 px-2 backdrop-blur">
-        <div className="grid grid-cols-4">
+        <div className="grid grid-cols-6">
           {(
             [
               ["pedir", "🎵", "Pedir"],
+              ["promo", "🎁", "Promo"],
+              ["shows", "📅", "Shows"],
               ["sugerir", "💡", "Sugerir"],
               ["pix", "💸", "Pix"],
               ["recado", "💬", "Recado"],
@@ -103,11 +121,16 @@ export default function AudienceApp({ bandName, instagram, pix, catalog }: Props
             <button
               key={id}
               onClick={() => setTab(id)}
-              className={`flex flex-col items-center gap-0.5 py-2.5 text-xs font-semibold uppercase tracking-wider transition ${
+              className={`relative flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-semibold uppercase tracking-wide transition ${
                 tab === id ? "text-gold" : "text-muted hover:text-white"
               }`}
             >
               <span className="text-lg leading-none">{icon}</span>
+              {id === "promo" && !!state?.promotions?.length && (
+                <span className="absolute right-[calc(50%-1.4rem)] top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-hit px-1 text-[10px] font-bold text-white">
+                  {state.promotions.length}
+                </span>
+              )}
               {label}
               <span className={`mt-1 h-0.5 w-8 rounded-full ${tab === id ? "bg-gold" : "bg-transparent"}`} />
             </button>
@@ -117,6 +140,8 @@ export default function AudienceApp({ bandName, instagram, pix, catalog }: Props
 
       <main className="flex-1 px-4 py-4">
         {tab === "pedir" && <RequestTab state={state} catalog={catalog} onDone={() => refresh()} />}
+        {tab === "promo" && <PromoTab state={state} bandName={bandName} />}
+        {tab === "shows" && <ShowsTab agenda={agenda} />}
         {tab === "sugerir" && <SuggestTab />}
         {tab === "pix" && <PixTab pix={pix} />}
         {tab === "recado" && <CommentTab />}
@@ -143,7 +168,10 @@ function ShowBanner({ state }: { state: State | null }) {
         <span className="h-2 w-2 animate-pulse rounded-full bg-hit" /> Ao vivo
       </div>
       <div className="font-display text-xl font-bold uppercase">{state.show.venue}</div>
-      <div className="text-sm text-muted first-letter:uppercase">{fmtDate(state.show.date)}</div>
+      <div className="text-sm text-muted first-letter:uppercase">
+        {fmtDate(state.show.date)}
+        {fmtRange(state.show.startTime, state.show.endTime) && ` · ${fmtRange(state.show.startTime, state.show.endTime)}`}
+      </div>
     </div>
   );
 }
@@ -480,6 +508,102 @@ function CommentTab() {
         {busy ? "Enviando…" : "Enviar recado"}
       </button>
     </form>
+  );
+}
+
+function ShowsTab({ agenda }: { agenda: Props["agenda"] }) {
+  if (agenda.length === 0)
+    return (
+      <div className="card px-5 py-10 text-center">
+        <div className="text-4xl">📅</div>
+        <h2 className="mt-2 font-display text-2xl font-bold uppercase">Agenda</h2>
+        <p className="mt-1 text-sm text-muted">Nenhum show agendado por enquanto. Siga a banda no Instagram para saber das novidades!</p>
+      </div>
+    );
+  return (
+    <div className="space-y-3">
+      <h2 className="text-center font-display text-2xl font-bold uppercase">Próximos shows</h2>
+      <ul className="space-y-2">
+        {agenda.map((s) => {
+          const [y, m, d] = s.date.split("-").map(Number);
+          const date = new Date(y, m - 1, d);
+          return (
+            <li key={s.id} className={`card flex items-center gap-4 p-3 ${s.live ? "border-hit/60" : ""}`}>
+              <div className={`flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-xl ${s.live ? "bg-hit text-white" : "bg-gold text-black"}`}>
+                <span className="font-display text-2xl font-bold leading-none">{String(d).padStart(2, "0")}</span>
+                <span className="text-[10px] font-bold uppercase">{date.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                {s.live && (
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-red-300">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-hit" /> Acontecendo agora
+                  </div>
+                )}
+                <div className="font-display text-lg font-bold uppercase leading-tight">{s.venue}</div>
+                <div className="text-sm text-muted first-letter:uppercase">
+                  {date.toLocaleDateString("pt-BR", { weekday: "long" })}
+                  {fmtRange(s.start, s.end) && ` · ${fmtRange(s.start, s.end)}`}
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function PromoTab({ state, bandName }: { state: State | null; bandName: string }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const promos = state?.promotions ?? [];
+  if (!state?.show || promos.length === 0)
+    return (
+      <div className="card px-5 py-10 text-center">
+        <div className="text-4xl">🎁</div>
+        <h2 className="mt-2 font-display text-2xl font-bold uppercase">Promoções</h2>
+        <p className="mt-1 text-sm text-muted">
+          {state?.show
+            ? "Nenhuma promoção ativa neste show por enquanto. Fique de olho!"
+            : "As promoções exclusivas aparecem aqui durante os shows da banda."}
+        </p>
+      </div>
+    );
+
+  return (
+    <div className="space-y-4">
+      <div className="text-center">
+        <h2 className="font-display text-2xl font-bold uppercase">Exclusivo para quem está no show</h2>
+        <p className="text-sm text-muted">Mostre esta tela no balcão para aproveitar.</p>
+      </div>
+
+      {promos.map((p) => (
+        <article key={p.id} className="relative overflow-hidden rounded-2xl border-2 border-dashed border-gold bg-gradient-to-br from-gold/20 via-panel to-hit/20 p-5">
+          <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gold/20 blur-2xl" />
+          <div className="text-[11px] font-bold uppercase tracking-widest text-gold">🎁 Promoção exclusiva do app</div>
+          <h3 className="mt-1 font-display text-3xl font-bold uppercase leading-tight">{p.title}</h3>
+          {p.description && <p className="mt-2 text-white/90">{p.description}</p>}
+        </article>
+      ))}
+
+      {/* Selo "ao vivo" com relógio correndo: ajuda o balcão a conferir que não é um print antigo */}
+      <div className="card flex items-center gap-3 px-4 py-3">
+        <span className="h-3 w-3 shrink-0 animate-pulse rounded-full bg-hit" />
+        <div className="min-w-0 flex-1 text-sm">
+          <div className="truncate font-semibold">
+            {bandName} · {state.show.venue}
+          </div>
+          <div className="text-xs text-muted">Válido somente hoje, durante o show</div>
+        </div>
+        <div className="font-display text-2xl font-bold tabular-nums text-gold">
+          {now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+        </div>
+      </div>
+    </div>
   );
 }
 

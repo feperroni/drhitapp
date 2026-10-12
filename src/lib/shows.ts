@@ -4,6 +4,9 @@ export type Show = {
   id: number;
   show_date: string;
   venue: string;
+  start_time: string | null; // "HH:MM:SS"
+  end_time: string | null;
+  announce: boolean;
   status: "draft" | "live" | "closed";
   requests_per_person: number;
   window_minutes: number;

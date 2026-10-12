@@ -8,6 +8,10 @@ import { emit } from "@/lib/events";
 function str(fd: FormData, key: string) {
   return String(fd.get(key) ?? "").trim();
 }
+function time(fd: FormData, key: string) {
+  const v = str(fd, key);
+  return /^\d{2}:\d{2}$/.test(v) ? v : null;
+}
 function int(fd: FormData, key: string, fallback: number | null) {
   const v = str(fd, key);
   if (!v) return fallback;
@@ -22,9 +26,14 @@ export async function createShow(fd: FormData) {
   const venue = str(fd, "venue");
   if (!date || !venue) return;
   const [show] = await sql<{ id: number }[]>`
-    insert into shows (show_date, venue, requests_per_person, window_minutes, max_requests)
-    values (${date}, ${venue}, ${int(fd, "requests_per_person", 1)}, ${int(fd, "window_minutes", 60)}, ${int(fd, "max_requests", null)})
+    insert into shows (show_date, venue, start_time, end_time, announce, requests_per_person, window_minutes, max_requests)
+    values (${date}, ${venue}, ${time(fd, "start_time")}, ${time(fd, "end_time")}, ${fd.get("announce") === "on"},
+            ${int(fd, "requests_per_person", 1)}, ${int(fd, "window_minutes", 60)}, ${int(fd, "max_requests", null)})
     returning id`;
+  for (const p of parsePromoLines(str(fd, "promotions"))) {
+    await sql`insert into promotions (show_id, title, description)
+              values (${show.id}, ${p.title.slice(0, 120)}, ${p.description?.slice(0, 500) ?? null})`;
+  }
   if (fd.get("publish")) await publish(show.id);
   revalidatePath("/admin", "layout");
 }
@@ -35,6 +44,9 @@ export async function updateShow(fd: FormData) {
     update shows set
       show_date = ${str(fd, "show_date")},
       venue = ${str(fd, "venue")},
+      start_time = ${time(fd, "start_time")},
+      end_time = ${time(fd, "end_time")},
+      announce = ${fd.get("announce") === "on"},
       requests_per_person = ${int(fd, "requests_per_person", 1)},
       window_minutes = ${int(fd, "window_minutes", 60)},
       max_requests = ${int(fd, "max_requests", null)}
@@ -163,4 +175,41 @@ export async function saveSettings(fd: FormData) {
     }
   }
   revalidatePath("/", "layout");
+}
+
+// ---------- Promoções do show ----------
+
+/** Linhas "Título — descrição" (ou "Título: descrição") viram promoções. */
+function parsePromoLines(text: string) {
+  return text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => {
+      const m = l.match(/^(.+?)\s+[—–-]\s+(.+)$/) ?? l.match(/^([^:]+):\s*(.+)$/);
+      return m ? { title: m[1].trim(), description: m[2].trim() } : { title: l, description: null };
+    });
+}
+
+export async function addPromotion(fd: FormData) {
+  const showId = Number(fd.get("show_id"));
+  const title = str(fd, "title").slice(0, 120);
+  if (!showId || !title) return;
+  await sql`
+    insert into promotions (show_id, title, description)
+    values (${showId}, ${title}, ${str(fd, "description").slice(0, 500) || null})`;
+  emit({ type: "show" });
+  revalidatePath("/admin", "layout");
+}
+
+export async function togglePromotion(fd: FormData) {
+  await sql`update promotions set active = not active where id = ${Number(fd.get("id"))}`;
+  emit({ type: "show" });
+  revalidatePath("/admin", "layout");
+}
+
+export async function deletePromotion(fd: FormData) {
+  await sql`delete from promotions where id = ${Number(fd.get("id"))}`;
+  emit({ type: "show" });
+  revalidatePath("/admin", "layout");
 }

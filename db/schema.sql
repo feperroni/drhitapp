@@ -92,3 +92,18 @@ create table if not exists push_subscriptions (
   label      text,
   created_at timestamptz not null default now()
 );
+
+create table if not exists promotions (
+  id          serial primary key,
+  show_id     int  not null references shows(id) on delete cascade,
+  title       text not null,
+  description text,
+  active      boolean not null default true,
+  created_at  timestamptz not null default now()
+);
+create index if not exists promotions_show on promotions (show_id);
+
+-- Horário do show e se ele aparece na agenda (aba Shows) do app da plateia
+alter table shows add column if not exists start_time time;
+alter table shows add column if not exists end_time time;
+alter table shows add column if not exists announce boolean not null default true;

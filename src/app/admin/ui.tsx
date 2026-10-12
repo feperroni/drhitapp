@@ -111,6 +111,18 @@ export function fmtDateTime(d: string | Date) {
   });
 }
 
+/** "21:00:00", "01:30:00" → "21h às 01h30" */
+export function fmtTimeRange(start: string | null, end: string | null) {
+  const f = (t: string) => {
+    const [h, m] = t.split(":");
+    return m === "00" ? `${Number(h)}h` : `${Number(h)}h${m}`;
+  };
+  if (start && end) return `${f(start)} às ${f(end)}`;
+  if (start) return `a partir das ${f(start)}`;
+  if (end) return `até ${f(end)}`;
+  return "";
+}
+
 export function pct(a: number, b: number) {
   return b ? `${Math.round((a / b) * 100)}%` : "—";
 }

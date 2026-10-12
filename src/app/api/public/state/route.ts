@@ -15,7 +15,7 @@ export async function GET(req: Request) {
 
   if (!show) return NextResponse.json({ show: null });
 
-  const [queue, mine, closed, total, next] = await Promise.all([
+  const [queue, mine, closed, total, next, promos] = await Promise.all([
     getQueue(show.id),
     sql<{ song_id: number; title: string; artist_credit: string; status: string; created_at: string }[]>`
       select r.song_id, s.title, s.artist_credit, r.status, r.created_at
@@ -27,6 +27,9 @@ export async function GET(req: Request) {
       where show_id = ${show.id} and status in ('played', 'rejected')`,
     countRequests(show.id),
     nextAllowedAt(show, deviceId),
+    sql<{ id: number; title: string; description: string | null }[]>`
+      select id, title, description from promotions
+      where show_id = ${show.id} and active order by created_at`,
   ]);
 
   const position = new Map(queue.map((q, i) => [q.song_id, i + 1]));
@@ -37,6 +40,8 @@ export async function GET(req: Request) {
       id: show.id,
       venue: show.venue,
       date: show.show_date,
+      startTime: show.start_time,
+      endTime: show.end_time,
       open: show.requests_open && !full,
       full,
       requestsPerPerson: show.requests_per_person,
@@ -53,5 +58,6 @@ export async function GET(req: Request) {
     queueSize: queue.length,
     unavailable: closed.map((c) => ({ songId: c.song_id, status: c.status })),
     nextAllowedAt: next?.toISOString() ?? null,
+    promotions: promos,
   });
 }

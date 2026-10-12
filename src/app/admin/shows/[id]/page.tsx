@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { sql } from "@/lib/db";
 import { showInsights } from "@/lib/insights";
 import { getShow } from "@/lib/shows";
-import { closeShow, deleteShow, publishShow, updateShow } from "../../actions";
-import { Bars, PageTitle, Tile, Timeline, fmtDate, fmtDateTime, pct } from "../../ui";
+import { addPromotion, closeShow, deletePromotion, deleteShow, publishShow, togglePromotion, updateShow } from "../../actions";
+import { Bars, PageTitle, Tile, Timeline, fmtDate, fmtDateTime, fmtTimeRange, pct } from "../../ui";
 
 const STATUS_LABEL: Record<string, string> = { pending: "na fila", accepted: "aceita", played: "tocada", rejected: "recusada" };
 
@@ -13,12 +13,14 @@ export default async function ShowDetail({ params }: { params: Promise<{ id: str
   const show = Number.isInteger(id) ? await getShow(id) : null;
   if (!show) notFound();
 
-  const [ins, comments, suggestions] = await Promise.all([
+  const [ins, comments, suggestions, promos] = await Promise.all([
     showInsights(id),
     sql<{ id: number; name: string | null; message: string; created_at: string }[]>`
       select id, name, message, created_at from comments where show_id = ${id} order by created_at desc`,
     sql<{ id: number; title: string; artist: string | null; created_at: string }[]>`
       select id, title, artist, created_at from suggestions where show_id = ${id} order by created_at desc`,
+    sql<{ id: number; title: string; description: string | null; active: boolean }[]>`
+      select id, title, description, active from promotions where show_id = ${id} order by created_at`,
   ]);
   const t = ins.totals;
   const insights = buildInsights(ins);
@@ -28,7 +30,7 @@ export default async function ShowDetail({ params }: { params: Promise<{ id: str
       <Link href="/admin/shows" className="text-sm text-muted hover:text-white">
         ← Shows
       </Link>
-      <PageTitle sub={`${fmtDate(show.show_date)} · ${show.status === "live" ? "AO VIVO" : show.status === "closed" ? "encerrado" : "rascunho"}`}>
+      <PageTitle sub={`${fmtDate(show.show_date)}${fmtTimeRange(show.start_time, show.end_time) ? ` · ${fmtTimeRange(show.start_time, show.end_time)}` : ""} · ${show.status === "live" ? "AO VIVO" : show.status === "closed" ? "encerrado" : "rascunho"}`}>
         {show.venue}
       </PageTitle>
 
@@ -50,6 +52,43 @@ export default async function ShowDetail({ params }: { params: Promise<{ id: str
           </form>
         )}
       </div>
+
+      <section className="card p-4">
+        <h3 className="label mb-1">🎁 Promoções exclusivas do app</h3>
+        <p className="mb-3 text-xs text-muted">
+          Aparecem na aba <b>Promo</b> do app enquanto este show estiver ao vivo. A pessoa mostra a tela no balcão para ganhar.
+        </p>
+        {promos.length > 0 && (
+          <ul className="mb-4 divide-y divide-line rounded-xl border border-line">
+            {promos.map((p) => (
+              <li key={p.id} className={`flex flex-wrap items-center gap-3 px-3 py-2.5 ${p.active ? "" : "opacity-50"}`}>
+                <div className="min-w-[12rem] flex-1">
+                  <div className="font-semibold">
+                    {p.title} {!p.active && <span className="ml-1 rounded bg-zinc-700 px-1.5 text-[10px] uppercase">pausada</span>}
+                  </div>
+                  {p.description && <div className="text-sm text-muted">{p.description}</div>}
+                </div>
+                <form action={togglePromotion}>
+                  <input type="hidden" name="id" value={p.id} />
+                  <button className="rounded-lg px-2 py-1 text-sm text-muted hover:bg-panel-2 hover:text-white">
+                    {p.active ? "Pausar" : "Reativar"}
+                  </button>
+                </form>
+                <form action={deletePromotion}>
+                  <input type="hidden" name="id" value={p.id} />
+                  <button className="rounded-lg px-2 py-1 text-sm text-red-400 hover:bg-panel-2">Remover</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form action={addPromotion} className="grid gap-3 sm:grid-cols-[1fr_2fr_auto]">
+          <input type="hidden" name="show_id" value={show.id} />
+          <input name="title" required maxLength={120} placeholder="Título (ex.: Chopp em dobro)" className="input" />
+          <input name="description" maxLength={500} placeholder="Detalhes (ex.: 2 por 1 até as 23h, no bar)" className="input" />
+          <button className="btn-gold">Adicionar</button>
+        </form>
+      </section>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Tile label="Acessos" value={t.visitors} hint="pessoas únicas" />
@@ -136,6 +175,18 @@ export default async function ShowDetail({ params }: { params: Promise<{ id: str
           <label className="lg:col-span-2">
             <span className="label">Local</span>
             <input name="venue" defaultValue={show.venue} required className="input" />
+          </label>
+          <label>
+            <span className="label">Início</span>
+            <input type="time" name="start_time" defaultValue={show.start_time?.slice(0, 5) ?? ""} className="input" />
+          </label>
+          <label>
+            <span className="label">Fim</span>
+            <input type="time" name="end_time" defaultValue={show.end_time?.slice(0, 5) ?? ""} className="input" />
+          </label>
+          <label className="flex items-center gap-2 self-end pb-3 text-sm">
+            <input type="checkbox" name="announce" defaultChecked={show.announce} className="h-4 w-4 accent-[var(--color-gold)]" />
+            Divulgar na agenda
           </label>
           <label>
             <span className="label">Pedidos/pessoa</span>
