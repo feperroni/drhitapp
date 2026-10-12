@@ -1,0 +1,11 @@
+node_modules
+.next
+.pglite
+.env*.local
+.env
+*.tsbuildinfo
+next-env.d.ts
+
+# arquivos originais (o logo usado está em public/)
+/WhatsApp Image*
+/Set_List_*.pdf

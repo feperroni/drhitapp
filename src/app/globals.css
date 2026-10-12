@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #0a0a0b;
+  --color-panel: #141417;
+  --color-panel-2: #1c1c21;
+  --color-line: #2a2a31;
+  --color-muted: #9a9aa5;
+  --color-hit: #e5161d;
+  --color-hit-dark: #b20f15;
+  --color-gold: #e2b33c;
+  --color-gold-soft: #f3d27a;
+  --font-display: var(--font-oswald), "Arial Narrow", sans-serif;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+}
+
+html,
+body {
+  background: var(--color-ink);
+  color: #f4f4f6;
+}
+
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gold-text {
+  background: linear-gradient(180deg, var(--color-gold-soft), var(--color-gold) 55%, #a87b17);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-semibold transition active:scale-[.98] disabled:opacity-40 disabled:pointer-events-none;
+}
+@utility btn-hit {
+  @apply btn bg-hit text-white hover:bg-hit-dark;
+}
+@utility btn-gold {
+  @apply btn bg-gold text-black hover:bg-gold-soft;
+}
+@utility btn-ghost {
+  @apply btn border border-line bg-panel-2 text-white hover:border-muted;
+}
+@utility input {
+  @apply w-full rounded-xl border border-line bg-panel-2 px-4 py-3 text-white placeholder:text-muted outline-none focus:border-gold;
+}
+@utility card {
+  @apply rounded-2xl border border-line bg-panel;
+}
+@utility label {
+  @apply mb-1 block text-xs font-semibold uppercase tracking-wider text-muted;
+}
