@@ -94,14 +94,12 @@ export default function AudienceApp({ bandName, instagram, contact, pix, catalog
         <div className="pointer-events-none absolute inset-x-0 -top-24 mx-auto h-64 w-64 rounded-full bg-hit/25 blur-3xl" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo-transparente.webp" alt={`Logo ${bandName}`} className="relative mx-auto h-32 w-auto drop-shadow-[0_6px_24px_rgba(229,22,29,.35)]" />
-        <h1 className="relative mt-3 font-display text-3xl font-bold uppercase tracking-wide">
-          <span className="text-white">Doctor</span> <span className="text-hit">Hit</span>
-        </h1>
+        <h1 className="sr-only">{bandName}</h1>
         <a
           href={`https://instagram.com/${instagram}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="relative mt-2 inline-flex items-center gap-2 rounded-full border border-line bg-panel px-4 py-1.5 text-sm text-white hover:border-gold"
+          className="relative mt-4 inline-flex items-center gap-2 rounded-full border border-line bg-panel px-4 py-1.5 text-sm text-white hover:border-gold"
         >
           <InstagramIcon /> @{instagram}
         </a>
