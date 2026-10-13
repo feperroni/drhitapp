@@ -20,6 +20,9 @@ try {
     pix_key: "vinivico82@gmail.com",
     pix_name: "Banda Dr Hit",
     pix_city: "Sao Paulo",
+    contact_label: "Contato para shows",
+    contact_name: "Vico Guitarrista",
+    contact_whatsapp: "(11) 963005-5001",
   };
   for (const [key, value] of Object.entries(defaults)) {
     await sql`insert into settings (key, value) values (${key}, ${value}) on conflict (key) do nothing`;

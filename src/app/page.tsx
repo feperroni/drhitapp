@@ -27,6 +27,7 @@ export default async function Home() {
     <AudienceApp
       bandName={settings.band_name}
       instagram={settings.instagram}
+      contact={{ label: settings.contact_label ?? "", name: settings.contact_name ?? "", whatsapp: settings.contact_whatsapp ?? "" }}
       pix={{ payload: pix, svg: pixSvg, key: settings.pix_key, name: settings.pix_name }}
       catalog={catalog}
       agenda={agenda}

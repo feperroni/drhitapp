@@ -3,8 +3,20 @@ import { notFound } from "next/navigation";
 import { sql } from "@/lib/db";
 import { showInsights } from "@/lib/insights";
 import { getShow } from "@/lib/shows";
-import { addPromotion, closeShow, deletePromotion, deleteShow, publishShow, togglePromotion, updateShow } from "../../actions";
-import { Bars, PageTitle, Tile, Timeline, fmtDate, fmtDateTime, fmtTimeRange, pct } from "../../ui";
+import {
+  addPromotion,
+  closeShow,
+  copyMerchItems,
+  deleteMerchItem,
+  deletePromotion,
+  deleteShow,
+  publishShow,
+  saveMerchItem,
+  toggleMerchSoldOut,
+  togglePromotion,
+  updateShow,
+} from "../../actions";
+import { Bars, PageTitle, Tile, Timeline, brl, fmtDate, fmtDateTime, fmtTimeRange, pct } from "../../ui";
 
 const STATUS_LABEL: Record<string, string> = { pending: "na fila", accepted: "aceita", played: "tocada", rejected: "recusada" };
 
@@ -13,7 +25,7 @@ export default async function ShowDetail({ params }: { params: Promise<{ id: str
   const show = Number.isInteger(id) ? await getShow(id) : null;
   if (!show) notFound();
 
-  const [ins, comments, suggestions, promos] = await Promise.all([
+  const [ins, comments, suggestions, promos, merch, merchSources] = await Promise.all([
     showInsights(id),
     sql<{ id: number; name: string | null; message: string; created_at: string }[]>`
       select id, name, message, created_at from comments where show_id = ${id} order by created_at desc`,
@@ -21,6 +33,17 @@ export default async function ShowDetail({ params }: { params: Promise<{ id: str
       select id, title, artist, created_at from suggestions where show_id = ${id} order by created_at desc`,
     sql<{ id: number; title: string; description: string | null; active: boolean }[]>`
       select id, title, description, active from promotions where show_id = ${id} order by created_at`,
+    sql<{ id: number; name: string; description: string | null; price_cents: number; sold_out: boolean; image: string | null }[]>`
+      select id, name, description, price_cents, sold_out,
+             case when image is not null
+               then '/api/merch/' || id || '/image?v=' || extract(epoch from updated_at)::bigint end as image
+      from merch_items where show_id = ${id} order by id`,
+    // shows anteriores com itens, para copiar a loja
+    sql<{ id: number; venue: string; show_date: string; items: number }[]>`
+      select s.id, s.venue, s.show_date, count(m.id)::int as items
+      from shows s join merch_items m on m.show_id = s.id
+      where s.id <> ${id}
+      group by s.id order by s.show_date desc, s.id desc limit 10`,
   ]);
   const t = ins.totals;
   const insights = buildInsights(ins);
@@ -88,6 +111,123 @@ export default async function ShowDetail({ params }: { params: Promise<{ id: str
           <input name="description" maxLength={500} placeholder="Detalhes (ex.: 2 por 1 até as 23h, no bar)" className="input" />
           <button className="btn-gold">Adicionar</button>
         </form>
+      </section>
+
+      <section className="card p-4">
+        <h3 className="label mb-1">🛍️ Loja da banda neste show</h3>
+        <p className="mb-3 text-xs text-muted">
+          Itens à venda (copos, camisetas, adesivos…). Aparecem na aba <b>Loja</b> do app enquanto este show estiver ao vivo.
+        </p>
+
+        {merch.length > 0 && (
+          <ul className="mb-4 divide-y divide-line rounded-xl border border-line">
+            {merch.map((m) => (
+              <li key={m.id} className={`p-3 ${m.sold_out ? "opacity-60" : ""}`}>
+                <div className="flex flex-wrap items-center gap-3">
+                  {m.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={m.image} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover" />
+                  ) : (
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-panel-2 text-2xl">🛍️</div>
+                  )}
+                  <div className="min-w-[10rem] flex-1">
+                    <div className="font-semibold">
+                      {m.name}{" "}
+                      {m.sold_out && <span className="ml-1 rounded bg-zinc-700 px-1.5 text-[10px] uppercase">esgotado</span>}
+                    </div>
+                    <div className="text-sm text-gold">{brl(m.price_cents)}</div>
+                    {m.description && <div className="text-xs text-muted">{m.description}</div>}
+                  </div>
+                  <form action={toggleMerchSoldOut}>
+                    <input type="hidden" name="id" value={m.id} />
+                    <button className="rounded-lg px-2 py-1 text-sm text-muted hover:bg-panel-2 hover:text-white">
+                      {m.sold_out ? "Voltou ao estoque" : "Marcar esgotado"}
+                    </button>
+                  </form>
+                  <form action={deleteMerchItem}>
+                    <input type="hidden" name="id" value={m.id} />
+                    <button className="rounded-lg px-2 py-1 text-sm text-red-400 hover:bg-panel-2">Remover</button>
+                  </form>
+                </div>
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-sm text-gold">Editar</summary>
+                  <form action={saveMerchItem} className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <input type="hidden" name="id" value={m.id} />
+                    <label>
+                      <span className="label">Nome</span>
+                      <input name="name" required maxLength={120} defaultValue={m.name} className="input" />
+                    </label>
+                    <label>
+                      <span className="label">Preço (R$)</span>
+                      <input
+                        name="price"
+                        inputMode="decimal"
+                        defaultValue={(m.price_cents / 100).toFixed(2).replace(".", ",")}
+                        className="input"
+                      />
+                    </label>
+                    <label className="sm:col-span-2">
+                      <span className="label">Descrição</span>
+                      <input name="description" maxLength={500} defaultValue={m.description ?? ""} className="input" />
+                    </label>
+                    <label>
+                      <span className="label">Trocar foto</span>
+                      <input type="file" name="image" accept="image/*" className="input py-2 text-sm" />
+                    </label>
+                    {m.image && (
+                      <label className="flex items-center gap-2 self-end pb-3 text-sm">
+                        <input type="checkbox" name="remove_image" className="h-4 w-4" /> Remover foto
+                      </label>
+                    )}
+                    <div className="sm:col-span-2">
+                      <button className="btn-gold text-sm">Salvar item</button>
+                    </div>
+                  </form>
+                </details>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <form action={saveMerchItem} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <input type="hidden" name="show_id" value={show.id} />
+          <label>
+            <span className="label">Item</span>
+            <input name="name" required maxLength={120} placeholder="Ex.: Copo Dr. Hit" className="input" />
+          </label>
+          <label>
+            <span className="label">Preço (R$)</span>
+            <input name="price" inputMode="decimal" placeholder="25,00" className="input" />
+          </label>
+          <label className="lg:col-span-2">
+            <span className="label">Descrição (opcional)</span>
+            <input name="description" maxLength={500} placeholder="Ex.: Copo de 500 ml, edição limitada" className="input" />
+          </label>
+          <label className="lg:col-span-2">
+            <span className="label">Foto (opcional)</span>
+            <input type="file" name="image" accept="image/*" className="input py-2 text-sm" />
+          </label>
+          <div className="flex items-end">
+            <button className="btn-gold">Adicionar item</button>
+          </div>
+        </form>
+
+        {merchSources.length > 0 && (
+          <form action={copyMerchItems} className="mt-4 flex flex-wrap items-end gap-2 border-t border-line pt-4">
+            <input type="hidden" name="show_id" value={show.id} />
+            <label className="min-w-[14rem] flex-1">
+              <span className="label">Copiar itens de outro show</span>
+              <select name="from_show_id" className="input">
+                {merchSources.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.show_date.split("-").reverse().join("/")} · {s.venue} ({s.items} {s.items === 1 ? "item" : "itens"})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className="btn-ghost">Copiar para este show</button>
+          </form>
+        )}
       </section>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">

@@ -21,6 +21,9 @@ export default async function ConfigPage() {
     ["pix_key", "Chave Pix"],
     ["pix_name", "Nome do favorecido no Pix", "Até 25 caracteres, sem acentos"],
     ["pix_city", "Cidade do favorecido no Pix", "Até 15 caracteres"],
+    ["contact_label", "Título do contato", "Aparece abaixo do Instagram no app. Ex.: Contato para shows"],
+    ["contact_name", "Nome do contato", "Deixe em branco para esconder o contato"],
+    ["contact_whatsapp", "WhatsApp do contato", "Com DDD, ex.: (11) 96300-5001. Vira um botão que abre o WhatsApp"],
   ];
 
   return (
@@ -42,7 +45,7 @@ export default async function ConfigPage() {
       </section>
 
       <form action={saveSettings} className="card grid gap-4 p-5 sm:grid-cols-2">
-        <h2 className="label sm:col-span-2">Dados da banda e Pix</h2>
+        <h2 className="label sm:col-span-2">Dados da banda, Pix e contato</h2>
         {fields.map(([key, label, hint]) => (
           <label key={key}>
             <span className="label">{label}</span>

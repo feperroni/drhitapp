@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "db:local": "pglite-server --db=.pglite --port=5433",
+    "db:local": "pglite-server --db=.pglite --port=5433 --max-connections=8",
     "migrate": "node scripts/migrate.mjs",
     "build": "next build",
     "start": "node scripts/migrate.mjs && next start"
@@ -18,6 +18,7 @@
     "qrcode": "^1.5.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "sharp": "^0.35.5",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

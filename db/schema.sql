@@ -107,3 +107,18 @@ create index if not exists promotions_show on promotions (show_id);
 alter table shows add column if not exists start_time time;
 alter table shows add column if not exists end_time time;
 alter table shows add column if not exists announce boolean not null default true;
+
+-- Itens da banda à venda (copos, camisetas...) por show
+create table if not exists merch_items (
+  id          serial primary key,
+  show_id     int  not null references shows(id) on delete cascade,
+  name        text not null,
+  description text,
+  price_cents int  not null default 0,
+  image       bytea,
+  image_type  text,
+  sold_out    boolean not null default false,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists merch_items_show on merch_items (show_id);

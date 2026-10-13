@@ -20,17 +20,19 @@ type State = {
   unavailable?: { songId: number; status: string }[];
   nextAllowedAt?: string | null;
   promotions?: { id: number; title: string; description: string | null }[];
+  merch?: { id: number; name: string; description: string | null; price: number; soldOut: boolean; image: string | null }[];
 };
 
 type Props = {
   bandName: string;
   instagram: string;
+  contact: { label: string; name: string; whatsapp: string };
   pix: { payload: string; svg: string; key: string; name: string };
   catalog: { songs: CatalogSong[]; artists: CatalogArtist[]; medleys: number[] };
   agenda: { id: number; date: string; venue: string; start: string | null; end: string | null; live: boolean }[];
 };
 
-type Tab = "pedir" | "promo" | "shows" | "sugerir" | "pix" | "recado";
+type Tab = "pedir" | "promo" | "loja" | "shows" | "sugerir" | "pix" | "recado";
 
 const MEDLEYS = "Medleys & Blocos Especiais";
 
@@ -66,7 +68,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   rejected: { label: "Não vai rolar hoje", cls: "bg-zinc-500/15 text-zinc-300 border-zinc-500/40" },
 };
 
-export default function AudienceApp({ bandName, instagram, pix, catalog, agenda }: Props) {
+export default function AudienceApp({ bandName, instagram, contact, pix, catalog, agenda }: Props) {
   const [tab, setTab] = useState<Tab>("pedir");
   const [state, setState] = useState<State | null>(null);
 
@@ -103,15 +105,17 @@ export default function AudienceApp({ bandName, instagram, pix, catalog, agenda 
         >
           <InstagramIcon /> @{instagram}
         </a>
+        <ContactInfo contact={contact} />
         <ShowBanner state={state} />
       </header>
 
       <nav className="sticky top-0 z-20 border-y border-line bg-ink/90 px-2 backdrop-blur">
-        <div className="grid grid-cols-6">
+        <div className="grid grid-cols-7">
           {(
             [
               ["pedir", "🎵", "Pedir"],
               ["promo", "🎁", "Promo"],
+              ["loja", "🛍️", "Loja"],
               ["shows", "📅", "Shows"],
               ["sugerir", "💡", "Sugerir"],
               ["pix", "💸", "Pix"],
@@ -121,7 +125,7 @@ export default function AudienceApp({ bandName, instagram, pix, catalog, agenda 
             <button
               key={id}
               onClick={() => setTab(id)}
-              className={`relative flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-semibold uppercase tracking-wide transition ${
+              className={`relative flex flex-col items-center gap-0.5 py-2.5 text-[9.5px] font-semibold uppercase tracking-normal transition ${
                 tab === id ? "text-gold" : "text-muted hover:text-white"
               }`}
             >
@@ -141,6 +145,7 @@ export default function AudienceApp({ bandName, instagram, pix, catalog, agenda 
       <main className="flex-1 px-4 py-4">
         {tab === "pedir" && <RequestTab state={state} catalog={catalog} onDone={() => refresh()} />}
         {tab === "promo" && <PromoTab state={state} bandName={bandName} />}
+        {tab === "loja" && <ShopTab state={state} />}
         {tab === "shows" && <ShowsTab agenda={agenda} />}
         {tab === "sugerir" && <SuggestTab />}
         {tab === "pix" && <PixTab pix={pix} />}
@@ -508,6 +513,87 @@ function CommentTab() {
         {busy ? "Enviando…" : "Enviar recado"}
       </button>
     </form>
+  );
+}
+
+function ContactInfo({ contact }: { contact: Props["contact"] }) {
+  if (!contact.name && !contact.whatsapp) return null;
+  let digits = contact.whatsapp.replace(/\D/g, "");
+  if (digits && !digits.startsWith("55")) digits = "55" + digits;
+  const msg = encodeURIComponent("Olá! Vi o app da Doctor Hit e quero falar sobre shows.");
+  return (
+    <div className="relative mt-3 text-sm">
+      {contact.label && <div className="text-[11px] font-semibold uppercase tracking-wider text-muted">{contact.label}</div>}
+      {contact.name && <div className="font-semibold">{contact.name}</div>}
+      {contact.whatsapp && (
+        <a
+          href={`https://wa.me/${digits}?text=${msg}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1 inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-emerald-300 hover:border-emerald-400"
+        >
+          <WhatsAppIcon /> WhatsApp {contact.whatsapp}
+        </a>
+      )}
+    </div>
+  );
+}
+
+function WhatsAppIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2l-.5-.3Z" />
+    </svg>
+  );
+}
+
+function ShopTab({ state }: { state: State | null }) {
+  const items = state?.merch ?? [];
+  const brl = (c: number) => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  if (!state?.show || items.length === 0)
+    return (
+      <div className="card px-5 py-10 text-center">
+        <div className="text-4xl">🛍️</div>
+        <h2 className="mt-2 font-display text-2xl font-bold uppercase">Loja da banda</h2>
+        <p className="mt-1 text-sm text-muted">
+          {state?.show
+            ? "Nenhum item à venda neste show por enquanto."
+            : "Copos, camisetas e outros itens da banda aparecem aqui durante os shows."}
+        </p>
+      </div>
+    );
+
+  return (
+    <div className="space-y-4">
+      <div className="text-center">
+        <h2 className="font-display text-2xl font-bold uppercase">Loja da banda</h2>
+        <p className="text-sm text-muted">Garanta o seu com o pessoal da banda aqui no show!</p>
+      </div>
+      <ul className="grid grid-cols-2 gap-3">
+        {items.map((m) => (
+          <li key={m.id} className={`card overflow-hidden ${m.soldOut ? "opacity-60" : ""}`}>
+            <div className="relative aspect-square bg-panel-2">
+              {m.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={m.image} alt={m.name} className="h-full w-full object-cover" loading="lazy" />
+              ) : (
+                <div className="flex h-full items-center justify-center text-5xl">🛍️</div>
+              )}
+              {m.soldOut && (
+                <span className="absolute left-2 top-2 rounded-full bg-black/80 px-2 py-0.5 text-[10px] font-bold uppercase">Esgotado</span>
+              )}
+            </div>
+            <div className="p-3">
+              <div className="font-semibold leading-tight">{m.name}</div>
+              {m.description && <div className="mt-0.5 text-xs text-muted">{m.description}</div>}
+              <div className="mt-1 font-display text-xl font-bold text-gold">{brl(m.price)}</div>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <p className="text-center text-xs text-muted">Pagamento com a banda no local. Também aceitamos Pix: veja a aba Pix.</p>
+    </div>
   );
 }
 

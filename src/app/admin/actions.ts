@@ -166,10 +166,11 @@ export async function markCommentsRead(fd: FormData) {
 // ---------- Configurações ----------
 
 export async function saveSettings(fd: FormData) {
-  for (const key of ["band_name", "instagram", "pix_key", "pix_name", "pix_city"]) {
+  for (const key of ["band_name", "instagram", "pix_key", "pix_name", "pix_city", "contact_label", "contact_name", "contact_whatsapp"]) {
     let value = str(fd, key);
     if (key === "instagram") value = value.replace(/^@/, "");
-    if (value) {
+    // o contato pode ser apagado (some do app); os demais campos são obrigatórios
+    if (value || key.startsWith("contact_")) {
       await sql`insert into settings (key, value) values (${key}, ${value})
                 on conflict (key) do update set value = excluded.value`;
     }
@@ -210,6 +211,80 @@ export async function togglePromotion(fd: FormData) {
 
 export async function deletePromotion(fd: FormData) {
   await sql`delete from promotions where id = ${Number(fd.get("id"))}`;
+  emit({ type: "show" });
+  revalidatePath("/admin", "layout");
+}
+
+// ---------- Loja da banda (itens à venda por show) ----------
+
+/** "25", "25,90", "R$ 1.234,50" → centavos */
+function priceCents(fd: FormData) {
+  const raw = str(fd, "price").replace(/[^\d,.]/g, "");
+  if (!raw) return 0;
+  const normalized = raw.includes(",") ? raw.replace(/\./g, "").replace(",", ".") : raw;
+  const n = Math.round(Number(normalized) * 100);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+/** Foto enviada → WebP de até 800px (guardada no próprio banco). */
+async function readImage(fd: FormData) {
+  const file = fd.get("image");
+  if (!(file instanceof File) || file.size === 0) return null;
+  if (file.size > 8 * 1024 * 1024) throw new Error("Foto muito grande (máx. 8 MB)");
+  const sharp = (await import("sharp")).default;
+  const data = await sharp(Buffer.from(await file.arrayBuffer()))
+    .rotate()
+    .resize(800, 800, { fit: "inside", withoutEnlargement: true })
+    .webp({ quality: 80 })
+    .toBuffer();
+  return { data, type: "image/webp" };
+}
+
+export async function saveMerchItem(fd: FormData) {
+  const id = Number(fd.get("id")) || null;
+  const showId = Number(fd.get("show_id"));
+  const name = str(fd, "name").slice(0, 120);
+  if (!name || (!id && !showId)) return;
+  const description = str(fd, "description").slice(0, 500) || null;
+  const price = priceCents(fd);
+  const image = await readImage(fd);
+
+  if (id) {
+    await sql`
+      update merch_items set name = ${name}, description = ${description}, price_cents = ${price}, updated_at = now()
+      where id = ${id}`;
+    if (image) await sql`update merch_items set image = ${image.data}, image_type = ${image.type} where id = ${id}`;
+    if (fd.get("remove_image")) await sql`update merch_items set image = null, image_type = null where id = ${id}`;
+  } else {
+    await sql`
+      insert into merch_items (show_id, name, description, price_cents, image, image_type)
+      values (${showId}, ${name}, ${description}, ${price}, ${image?.data ?? null}, ${image?.type ?? null})`;
+  }
+  emit({ type: "show" });
+  revalidatePath("/admin", "layout");
+}
+
+export async function toggleMerchSoldOut(fd: FormData) {
+  await sql`update merch_items set sold_out = not sold_out, updated_at = now() where id = ${Number(fd.get("id"))}`;
+  emit({ type: "show" });
+  revalidatePath("/admin", "layout");
+}
+
+export async function deleteMerchItem(fd: FormData) {
+  await sql`delete from merch_items where id = ${Number(fd.get("id"))}`;
+  emit({ type: "show" });
+  revalidatePath("/admin", "layout");
+}
+
+/** Copia os itens de outro show (com fotos) para este show. */
+export async function copyMerchItems(fd: FormData) {
+  const showId = Number(fd.get("show_id"));
+  const fromId = Number(fd.get("from_show_id"));
+  if (!showId || !fromId) return;
+  await sql`
+    insert into merch_items (show_id, name, description, price_cents, image, image_type)
+    select ${showId}, name, description, price_cents, image, image_type
+    from merch_items where show_id = ${fromId} order by id`;
   emit({ type: "show" });
   revalidatePath("/admin", "layout");
 }

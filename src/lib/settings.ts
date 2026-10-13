@@ -6,6 +6,9 @@ export type Settings = {
   pix_key: string;
   pix_name: string;
   pix_city: string;
+  contact_label: string;
+  contact_name: string;
+  contact_whatsapp: string;
 };
 
 export async function getSettings(): Promise<Settings> {

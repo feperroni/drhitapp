@@ -123,6 +123,10 @@ export function fmtTimeRange(start: string | null, end: string | null) {
   return "";
 }
 
+export function brl(cents: number) {
+  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
 export function pct(a: number, b: number) {
   return b ? `${Math.round((a / b) * 100)}%` : "—";
 }

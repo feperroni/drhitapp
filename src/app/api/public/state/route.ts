@@ -15,7 +15,7 @@ export async function GET(req: Request) {
 
   if (!show) return NextResponse.json({ show: null });
 
-  const [queue, mine, closed, total, next, promos] = await Promise.all([
+  const [queue, mine, closed, total, next, promos, merch] = await Promise.all([
     getQueue(show.id),
     sql<{ song_id: number; title: string; artist_credit: string; status: string; created_at: string }[]>`
       select r.song_id, s.title, s.artist_credit, r.status, r.created_at
@@ -30,6 +30,12 @@ export async function GET(req: Request) {
     sql<{ id: number; title: string; description: string | null }[]>`
       select id, title, description from promotions
       where show_id = ${show.id} and active order by created_at`,
+    sql<{ id: number; name: string; description: string | null; price_cents: number; sold_out: boolean; image: string | null }[]>`
+      select id, name, description, price_cents, sold_out,
+             case when image is not null
+               then '/api/merch/' || id || '/image?v=' || extract(epoch from updated_at)::bigint end as image
+      from merch_items where show_id = ${show.id}
+      order by sold_out, id`,
   ]);
 
   const position = new Map(queue.map((q, i) => [q.song_id, i + 1]));
@@ -59,5 +65,13 @@ export async function GET(req: Request) {
     unavailable: closed.map((c) => ({ songId: c.song_id, status: c.status })),
     nextAllowedAt: next?.toISOString() ?? null,
     promotions: promos,
+    merch: merch.map((m) => ({
+      id: m.id,
+      name: m.name,
+      description: m.description,
+      price: m.price_cents,
+      soldOut: m.sold_out,
+      image: m.image,
+    })),
   });
 }
