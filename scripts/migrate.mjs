@@ -22,11 +22,14 @@ try {
     pix_city: "Sao Paulo",
     contact_label: "Contato para shows",
     contact_name: "Vico Guitarrista",
-    contact_whatsapp: "(11) 963005-5001",
+    contact_whatsapp: "(11) 96300-5001",
   };
   for (const [key, value] of Object.entries(defaults)) {
     await sql`insert into settings (key, value) values (${key}, ${value}) on conflict (key) do nothing`;
   }
+  // corrige o número digitado errado na primeira versão (só se ainda não foi editado na console)
+  await sql`update settings set value = '(11) 96300-5001'
+            where key = 'contact_whatsapp' and value = '(11) 963005-5001'`;
 
   const [{ count }] = await sql`select count(*)::int as count from songs`;
   if (count === 0) {
