@@ -36,6 +36,7 @@ export async function createShow(fd: FormData) {
   }
   if (fd.get("publish")) await publish(show.id);
   revalidatePath("/admin", "layout");
+  redirect(`/admin/shows?d=${date}`);
 }
 
 export async function updateShow(fd: FormData) {
@@ -74,11 +75,42 @@ export async function closeShow(fd: FormData) {
   revalidatePath("/admin", "layout");
 }
 
+/** Só aceita voltar para telas da própria console (evita redirecionar para fora). */
+function backTo(fd: FormData, fallback: string) {
+  const back = str(fd, "back");
+  return back.startsWith("/admin") ? back : fallback;
+}
+
 export async function deleteShow(fd: FormData) {
   await sql`delete from shows where id = ${Number(fd.get("id"))}`;
   emit({ type: "show" });
   revalidatePath("/admin", "layout");
-  redirect("/admin/shows");
+  redirect(backTo(fd, "/admin/shows"));
+}
+
+/** Repete um show em outra data: local, horário, limites, promoções e itens da loja (como rascunho). */
+export async function duplicateShow(fd: FormData) {
+  const id = Number(fd.get("id"));
+  const date = str(fd, "show_date");
+  if (!id || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  const newId = await sql.begin(async (tx) => {
+    const [row] = await tx<{ id: number }[]>`
+      insert into shows (show_date, venue, start_time, end_time, announce, requests_per_person, window_minutes, max_requests)
+      select ${date}, venue, start_time, end_time, announce, requests_per_person, window_minutes, max_requests
+      from shows where id = ${id}
+      returning id`;
+    if (!row) return null;
+    await tx`
+      insert into promotions (show_id, title, description, active)
+      select ${row.id}, title, description, active from promotions where show_id = ${id} order by id`;
+    await tx`
+      insert into merch_items (show_id, name, description, price_cents, image, image_type, sold_out)
+      select ${row.id}, name, description, price_cents, image, image_type, false from merch_items where show_id = ${id} order by id`;
+    return row.id;
+  });
+  if (!newId) return;
+  revalidatePath("/admin", "layout");
+  redirect(`/admin/shows?d=${date}`);
 }
 
 // ---------- Repertório ----------

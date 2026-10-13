@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import ConfirmButton from "../../ConfirmButton";
 import { sql } from "@/lib/db";
 import { showInsights } from "@/lib/insights";
 import { getShow } from "@/lib/shows";
@@ -50,8 +51,8 @@ export default async function ShowDetail({ params }: { params: Promise<{ id: str
 
   return (
     <div className="space-y-5">
-      <Link href="/admin/shows" className="text-sm text-muted hover:text-white">
-        ← Shows
+      <Link href={`/admin/shows?d=${show.show_date}`} className="text-sm text-muted hover:text-white">
+        ← Shows da semana
       </Link>
       <PageTitle sub={`${fmtDate(show.show_date)}${fmtTimeRange(show.start_time, show.end_time) ? ` · ${fmtTimeRange(show.start_time, show.end_time)}` : ""} · ${show.status === "live" ? "AO VIVO" : show.status === "closed" ? "encerrado" : "rascunho"}`}>
         {show.venue}
@@ -74,9 +75,13 @@ export default async function ShowDetail({ params }: { params: Promise<{ id: str
             <button className="btn-gold text-sm">{show.status === "closed" ? "Reabrir show" : "Publicar show"}</button>
           </form>
         )}
+        <a href="#loja" className="btn-ghost text-sm">🛍️ Loja</a>
+        <a href="#promocoes" className="btn-ghost text-sm">🎁 Promoções</a>
+        <a href="#insights" className="btn-ghost text-sm">📊 Insights</a>
+        <a href="#editar" className="btn-ghost text-sm">✏️ Editar</a>
       </div>
 
-      <section className="card p-4">
+      <section id="promocoes" className="card scroll-mt-4 p-4">
         <h3 className="label mb-1">🎁 Promoções exclusivas do app</h3>
         <p className="mb-3 text-xs text-muted">
           Aparecem na aba <b>Promo</b> do app enquanto este show estiver ao vivo. A pessoa mostra a tela no balcão para ganhar.
@@ -113,7 +118,7 @@ export default async function ShowDetail({ params }: { params: Promise<{ id: str
         </form>
       </section>
 
-      <section className="card p-4">
+      <section id="loja" className="card scroll-mt-4 border-gold/40 p-4">
         <h3 className="label mb-1">🛍️ Loja da banda neste show</h3>
         <p className="mb-3 text-xs text-muted">
           Itens à venda (copos, camisetas, adesivos…). Aparecem na aba <b>Loja</b> do app enquanto este show estiver ao vivo.
@@ -230,7 +235,7 @@ export default async function ShowDetail({ params }: { params: Promise<{ id: str
         )}
       </section>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div id="insights" className="grid scroll-mt-4 grid-cols-2 gap-3 lg:grid-cols-5">
         <Tile label="Acessos" value={t.visitors} hint="pessoas únicas" />
         <Tile label="Pediram" value={t.requesters} hint={`${pct(t.requesters, t.visitors)} de quem acessou`} />
         <Tile label="Pedidos" value={t.requests} hint={`${t.distinct_songs} músicas diferentes`} />
@@ -304,7 +309,7 @@ export default async function ShowDetail({ params }: { params: Promise<{ id: str
         </section>
       </div>
 
-      <details className="card p-4">
+      <details id="editar" className="card scroll-mt-4 p-4">
         <summary className="cursor-pointer font-semibold">Editar show</summary>
         <form action={updateShow} className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <input type="hidden" name="id" value={show.id} />
@@ -346,7 +351,13 @@ export default async function ShowDetail({ params }: { params: Promise<{ id: str
         </form>
         <form action={deleteShow} className="mt-6 border-t border-line pt-4">
           <input type="hidden" name="id" value={show.id} />
-          <button className="text-sm text-red-400 hover:underline">Excluir este show e todos os seus pedidos</button>
+          <input type="hidden" name="back" value={`/admin/shows?d=${show.show_date}`} />
+          <ConfirmButton
+            message={`Excluir o show "${show.venue}"? Os pedidos, promoções e itens da loja dele também serão apagados.`}
+            className="text-sm text-red-400 hover:underline"
+          >
+            Excluir este show e todos os seus pedidos
+          </ConfirmButton>
         </form>
       </details>
     </div>
